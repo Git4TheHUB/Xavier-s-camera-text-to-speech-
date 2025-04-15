@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Xavier's Epic Camera Text to Speech</title>
-  <!-- Google Fonts for an enhanced look -->
+  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -15,7 +16,7 @@
       padding: 0;
       display: flex;
       align-items: center;
-      flex-direction: column;
+      justify-content: center;
       min-height: 100vh;
     }
     .container {
@@ -64,10 +65,8 @@
       cursor: not-allowed;
     }
     .output {
-      /* Removed background and border styles for a plain text look */
-      background: transparent;
-      border: none;
-      border-radius: 0;
+      background: #f1f8e9;
+      border: solid 1px #c5e1a5;
       padding: 15px;
       margin-top: 20px;
       color: #33691e;
@@ -75,27 +74,29 @@
       white-space: pre-wrap;
       font-size: 1.1rem;
     }
+    @media (max-width: 768px) {
+      .container {
+        padding: 10px 20px;
+      }
+      h1 {
+        font-size: 1.5rem;
+      }
+    }
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="container" role="main">
     <h1>Xavier's Epic Camera Text to Speech</h1>
-    <p class="info">Just for you Dad hope you like it!</p>
-    <!-- Video element showing the back camera feed -->
-    <video id="video" autoplay playsinline></video>
-    <!-- Control buttons -->
-    <button class="button" id="capture">Take Photo</button>
-    <button class="button" id="readText" disabled>Read Text</button>
-    <button class="button" id="togglePause" disabled>Pause</button>
-    <!-- Hidden canvas element for processing the captured image -->
-    <canvas id="canvas" style="display:none;"></canvas>
-    <!-- Output container for the extracted text -->
-    <div class="output" id="output">Your text will appear here!</div>
+    <p class="info" aria-label="This is a special project for Dad!">Just for you Dad, hope you like it!</p>
+    <video id="video" autoplay playsinline aria-label="Camera preview"></video>
+    <button class="button" id="capture" aria-label="Take photo">Take Photo</button>
+    <button class="button" id="readText" disabled aria-label="Read text aloud">Read Text</button>
+    <button class="button" id="togglePause" disabled aria-label="Pause or resume text reading">Pause</button>
+    <canvas id="canvas" style="display:none;" aria-hidden="true"></canvas>
+    <div class="output" id="output" aria-label="Extracted text display">Your text will appear here!</div>
   </div>
-  <!-- Tesseract.js loaded from its CDN for OCR processing -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/2.1.4/tesseract.min.js"></script>
   <script>
-    // Get references to DOM elements
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     const captureButton = document.getElementById('capture');
@@ -107,71 +108,69 @@
     let utterance = null;
     let isPaused = false;
 
-    // Request the back (environment) camera
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } })
-      .then(stream => {
+    // Initialize camera
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
         video.srcObject = stream;
-      })
-      .catch(err => {
-        console.error("Error accessing the camera: " + err);
-        alert("Could not access the camera. Please ensure you have a back camera available and grant the required permissions.");
-      });
+      } catch (err) {
+        console.error("Camera access error:", err);
+        alert("Camera access denied. Please check your permissions.");
+      }
+    }
 
-    // Capture a photo and run OCR on it
-    captureButton.addEventListener('click', () => {
+    // Capture photo and perform OCR
+    async function captureImage() {
       const context = canvas.getContext('2d');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
       const imageData = canvas.toDataURL('image/png');
       outputDiv.textContent = "Processing image...";
-      Tesseract.recognize(
-        imageData,
-        'eng',
-        { logger: m => console.log(m) }
-      )
-      .then(({ data: { text } }) => {
+      try {
+        const { data: { text } } = await Tesseract.recognize(imageData, 'eng');
         extractedText = text;
-        outputDiv.textContent = "Text:\n" + text;
-        // Enable the buttons after text extraction
+        outputDiv.textContent = `Text:\n${text}`;
         readTextButton.disabled = false;
         togglePauseButton.disabled = false;
-      })
-      .catch(err => {
-        console.error("Error during OCR process:", err);
-        outputDiv.textContent = "Error during text recognition. Please try again.";
-      });
-    });
+      } catch (err) {
+        console.error("OCR error:", err);
+        outputDiv.textContent = "Error processing image.";
+      }
+    }
 
-    // Read the extracted text aloud using the Web Speech API
-    readTextButton.addEventListener('click', () => {
-      if (extractedText.trim() !== '') {
-        // Cancel any ongoing speech before starting a new one
+    // Speech synthesis functions
+    function readText() {
+      if (extractedText.trim()) {
         window.speechSynthesis.cancel();
         isPaused = false;
         togglePauseButton.textContent = 'Pause';
         utterance = new SpeechSynthesisUtterance(extractedText);
-        utterance.onend = () => {
-          // Disable the toggle button when speech is over
-          togglePauseButton.disabled = true;
-        };
+        utterance.onend = () => togglePauseButton.disabled = true;
         window.speechSynthesis.speak(utterance);
       }
-    });
+    }
 
-    // Toggle pause/resume functionality for speech synthesis
-    togglePauseButton.addEventListener('click', () => {
+    function togglePauseResume() {
       if (!utterance) return;
-      if (!isPaused) {
-        window.speechSynthesis.pause();
-        togglePauseButton.textContent = 'Resume';
-        isPaused = true;
-      } else {
+      if (isPaused) {
         window.speechSynthesis.resume();
         togglePauseButton.textContent = 'Pause';
         isPaused = false;
+      } else {
+        window.speechSynthesis.pause();
+        togglePauseButton.textContent = 'Resume';
+        isPaused = true;
       }
-    });
+    }
+
+    // Event listeners
+    captureButton.addEventListener('click', captureImage);
+    readTextButton.addEventListener('click', readText);
+    togglePauseButton.addEventListener('click', togglePauseResume);
+
+    // Start the camera
+    startCamera();
   </script>
 </body>
 </html>
